@@ -9,17 +9,94 @@
 <body>
     <div class="container">
         <h1>Content-Based Movie Recommender</h1>
-        <p>Select a movie you like, and we'll find similar ones for you!</p>
-        
+        <p>Select three distinct movies you have watched. Movie 1 doubles as the active item for the item-to-item comparison.</p>
+
         <div class="controls">
-            <select id="movie-select">
-                <option value="" disabled selected>Select a movie</option>
-            </select>
+            <div class="field">
+                <label for="watched-1">Watched Movie 1 / Active Movie</label>
+                <select id="watched-1">
+                    <option value="" disabled selected>Select a movie</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="watched-2">Watched Movie 2</label>
+                <select id="watched-2">
+                    <option value="" disabled selected>Select a movie</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="watched-3">Watched Movie 3</label>
+                <select id="watched-3">
+                    <option value="" disabled selected>Select a movie</option>
+                </select>
+            </div>
             <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
         </div>
-        
+
         <div id="result-box">
             <p id="result">Please wait, loading data...</p>
+        </div>
+
+        <div id="results" hidden>
+            <section class="result-section">
+                <h2>A. Item-to-Item Top-5 <span class="section-hint">(cosine vs Watched Movie 1)</span></h2>
+                <table class="top5-table">
+                    <thead>
+                        <tr>
+                            <th class="num">Rank</th>
+                            <th>Title</th>
+                            <th class="num">ID</th>
+                            <th class="num">Cosine</th>
+                            <th>Genres</th>
+                            <th class="num">Rating count</th>
+                            <th>Long-tail</th>
+                        </tr>
+                    </thead>
+                    <tbody id="i2i-tbody"></tbody>
+                </table>
+            </section>
+
+            <section class="result-section">
+                <h2>B. Profile-Based Top-5 <span class="section-hint">(profile = (v1 + v2 + v3) / 3)</span></h2>
+                <table class="top5-table">
+                    <thead>
+                        <tr>
+                            <th class="num">Rank</th>
+                            <th>Title</th>
+                            <th class="num">ID</th>
+                            <th class="num">Cosine</th>
+                            <th>Genres</th>
+                            <th class="num">Rating count</th>
+                            <th>Long-tail</th>
+                        </tr>
+                    </thead>
+                    <tbody id="profile-tbody"></tbody>
+                </table>
+            </section>
+
+            <section class="result-section">
+                <h2>Comparative Analysis</h2>
+                <div id="analysis"></div>
+            </section>
+
+            <section class="result-section">
+                <h2>Verification Checks</h2>
+                <div id="checks"></div>
+            </section>
+
+            <section class="formula-note">
+                <h2>Scoring Formula</h2>
+                <p>Recommendations are ranked by cosine similarity only:
+                    <strong>cos(a, b) = dot(a, b) / (&#124;&#124;a&#124;&#124; * &#124;&#124;b&#124;&#124;)</strong>,
+                    where a and b are 18-dimensional binary genre vectors (or the averaged profile vector).
+                    Both vector norms are used; if either norm is zero the similarity is defined as 0.</p>
+                <p><strong>Popularity (rating count derived from u.data) is evaluation metadata only &mdash;
+                    it is not part of the ranking score.</strong>
+                    Cosine normalization removes the direct vector-magnitude advantage that a raw dot
+                    product gives multi-genre (often mainstream) titles, but it does
+                    <strong>not</strong> guarantee removal of mainstream/popularity bias: popular titles
+                    often carry broad, generic genre blends that can still achieve high cosine similarity.</p>
+            </section>
         </div>
     </div>
 
