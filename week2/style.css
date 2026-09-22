@@ -22,7 +22,7 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     padding: 30px;
     width: 90%;
-    max-width: 600px;
+    max-width: 780px; /* widened from 600px so the result tables fit */
 }
 
 h1 {
@@ -44,7 +44,20 @@ p {
     margin-bottom: 25px;
 }
 
-#movie-select {
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+}
+
+.field label {
+    font-weight: bold;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+select {
     padding: 12px;
     border: 1px solid #ddd;
     border-radius: 5px;
@@ -53,7 +66,7 @@ p {
     transition: border-color 0.3s;
 }
 
-#movie-select:focus {
+select:focus {
     border-color: #3498db;
     outline: none;
 }
@@ -98,4 +111,140 @@ p {
 
 .success {
     color: #27ae60;
+}
+
+/* ---- Result sections (HW A02) ---- */
+
+#results {
+    margin-top: 20px;
+}
+
+.result-section {
+    margin-bottom: 22px;
+}
+
+h2 {
+    font-size: 18px;
+    color: #2c3e50;
+    text-align: left;
+    margin-bottom: 8px;
+}
+
+.section-hint {
+    font-size: 13px;
+    font-weight: normal;
+    color: #7f8c8d;
+}
+
+.top5-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.top5-table th,
+.top5-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid #ececec;
+    text-align: left;
+    vertical-align: top;
+}
+
+.top5-table th {
+    background-color: #f1f5f9;
+    color: #2c3e50;
+    font-size: 13px;
+}
+
+.top5-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.tail-yes {
+    color: #b9770e;
+    font-weight: bold;
+}
+
+.tail-no {
+    color: #95a5a6;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 5px 0;
+    border-bottom: 1px dashed #ececec;
+    font-size: 14px;
+    text-align: left;
+}
+
+.metric-row .label {
+    color: #555;
+}
+
+.metric-row .value {
+    font-weight: 600;
+    color: #2c3e50;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.metric-note {
+    margin-top: 8px;
+    margin-bottom: 0;
+    font-size: 13px;
+    font-style: italic;
+    color: #7f8c8d;
+    text-align: left;
+}
+
+.check {
+    padding: 9px 12px;
+    border-radius: 4px;
+    margin: 7px 0;
+    font-size: 14px;
+    text-align: left;
+}
+
+.check.pass {
+    background-color: #eafaf1;
+    border-left: 4px solid #27ae60;
+    color: #1e8449;
+    font-weight: bold;
+}
+
+.check.fail {
+    background-color: #fdf2f2;
+    border-left: 4px solid #e74c3c;
+    color: #c0392b;
+    font-weight: bold;
+}
+
+.check.neutral {
+    background-color: #fdfaf3;
+    border-left: 4px solid #f0b429;
+    color: #7d6608;
+    font-weight: normal;
+}
+
+.formula-note {
+    background-color: #eef5fb;
+    border-left: 4px solid #3498db;
+    padding: 12px 14px;
+    border-radius: 4px;
+}
+
+.formula-note p {
+    text-align: left;
+    color: #34495e;
+    font-weight: normal;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.formula-note p:last-child {
+    margin-bottom: 0;
 }
