@@ -1,206 +1,136 @@
-// Global variables
-let model;
-let isTraining = false;
+// ---------------------------------------------------------------------------
+// HW3 — Collaborative Filtering core
+//
+// Missing-value strategy (see week3/readme.md section 6). Choose EXACTLY ONE
+// and keep it consistent in cosineSimilarity below:
+//
+//   [ ] use co-rated entries only
+//   [ ] mean imputation
+//   [ ] weight similarity by the number of co-rated items
+//
+// Delete the two you did not choose.
+// ---------------------------------------------------------------------------
 
-// Initialize application when window loads
+// Initialize the application when the window loads
 window.onload = async function() {
+    const userBased = document.getElementById('user-based-result');
+    const itemBased = document.getElementById('item-based-result');
+
     try {
-        // Update status
-        updateStatus('Loading MovieLens data...');
-        
-        // Load data first
+        userBased.innerHTML = '<p>Loading movie data...</p>';
+        itemBased.innerHTML = '<p>Loading movie data...</p>';
+
         await loadData();
-        
-        // Populate dropdowns
+
         populateUserDropdown();
-        populateMovieDropdown();
-        
-        // Update status and start training
-        updateStatus('Data loaded. Training model...');
-        
-        // Train the model
-        await trainModel();
-        
+
+        userBased.innerHTML = '<p>Data loaded. Select a user.</p>';
+        itemBased.innerHTML = '<p>Data loaded. Select a user.</p>';
     } catch (error) {
         console.error('Initialization error:', error);
-        updateStatus('Error initializing application: ' + error.message, true);
+        // The error message is already shown by data.js
     }
 };
 
+// Populate the user dropdown with one option per user id found in u.data
 function populateUserDropdown() {
-    const userSelect = document.getElementById('user-select');
-    userSelect.innerHTML = '';
-    
-    // Add users (assuming user IDs are sequential from 1 to numUsers)
-    for (let i = 1; i <= numUsers; i++) {
+    const selectElement = document.getElementById('user-select');
+
+    // Clear existing options except the first placeholder
+    while (selectElement.options.length > 1) {
+        selectElement.remove(1);
+    }
+
+    for (let userId = 1; userId <= numUsers; userId++) {
         const option = document.createElement('option');
-        option.value = i;
-        option.textContent = `User ${i}`;
-        userSelect.appendChild(option);
+        option.value = userId;
+        option.textContent = `User ${userId}`;
+        selectElement.appendChild(option);
     }
 }
 
-function populateMovieDropdown() {
-    const movieSelect = document.getElementById('movie-select');
-    movieSelect.innerHTML = '';
-    
-    // Add movies
-    movies.forEach(movie => {
-        const option = document.createElement('option');
-        option.value = movie.id;
-        option.textContent = movie.year ? `${movie.title} (${movie.year})` : movie.title;
-        movieSelect.appendChild(option);
-    });
+// ---------------------------------------------------------------------------
+// TODO (HW3) — cosine similarity between two rating vectors.
+//
+// Compare only co-rated (non-zero) entries, per the missing-value strategy
+// you chose above. Return 0 when the denominator is 0 (that is, when the two
+// vectors share no rated items). See week3/readme.md section 5.3.
+//
+// Inputs: two arrays of equal length (slice the rating matrix column or row).
+// Output: a number in [0, 1].
+// ---------------------------------------------------------------------------
+function cosineSimilarity(a, b) {
+    // your implementation here
+    return 0;
 }
 
-function createModel(numUsers, numMovies, latentDim = 10) {
-    // User input
-    const userInput = tf.input({shape: [1], name: 'userInput'});
-    
-    // Movie input  
-    const movieInput = tf.input({shape: [1], name: 'movieInput'});
-    
-    // User embedding
-    const userEmbedding = tf.layers.embedding({
-        inputDim: numUsers + 1,
-        outputDim: latentDim,
-        name: 'userEmbedding'
-    }).apply(userInput);
-    
-    // Movie embedding
-    const movieEmbedding = tf.layers.embedding({
-        inputDim: numMovies + 1,
-        outputDim: latentDim, 
-        name: 'movieEmbedding'
-    }).apply(movieInput);
-    
-    // Reshape embeddings to flatten them
-    const userVector = tf.layers.flatten().apply(userEmbedding);
-    const movieVector = tf.layers.flatten().apply(movieEmbedding);
-    
-    // Dot product of user and movie vectors
-    const dotProduct = tf.layers.dot({axes: 1}).apply([userVector, movieVector]);
-    
-    // Reshape to get a single output value
-    const prediction = tf.layers.reshape({targetShape: [1]}).apply(dotProduct);
-    
-    // Create model
-    const model = tf.model({
-        inputs: [userInput, movieInput],
-        outputs: prediction
-    });
-    
-    return model;
+// ---------------------------------------------------------------------------
+// TODO (HW3) — User-Based CF.
+//
+// Return the top-K recommendations for the active user as an array of
+// { title, score }, sorted by score descending.
+//
+// Suggested steps (week3/readme.md section 5.4):
+//   1. compare the active user's rating vector against every other user
+//   2. take the N most similar users with positive similarity (e.g. N = 20)
+//   3. for each movie the active user has NOT rated, predict a score as the
+//      similarity-weighted average of those users' ratings
+//   4. sort and take the top K
+// ---------------------------------------------------------------------------
+function getUserBasedRecommendations(activeUserId, topK = 5) {
+    // your implementation here
+    return [];
 }
 
-async function trainModel() {
-    try {
-        isTraining = true;
-        document.getElementById('predict-btn').disabled = true;
-        
-        // Create model
-        model = createModel(numUsers, numMovies, 10);
-        
-        // Compile model
-        model.compile({
-            optimizer: tf.train.adam(0.001),
-            loss: 'meanSquaredError'
-        });
-        
-        // Prepare training data
-        const userIds = ratings.map(r => r.userId);
-        const movieIds = ratings.map(r => r.movieId);
-        const ratingValues = ratings.map(r => r.rating);
-        
-        const userTensor = tf.tensor2d(userIds, [userIds.length, 1]);
-        const movieTensor = tf.tensor2d(movieIds, [movieIds.length, 1]);
-        const ratingTensor = tf.tensor2d(ratingValues, [ratingValues.length, 1]);
-        
-        // Train model
-        updateStatus('Training model... (This may take a moment)');
-        
-        await model.fit([userTensor, movieTensor], ratingTensor, {
-            epochs: 10,
-            batchSize: 64,
-            validationSplit: 0.1,
-            callbacks: {
-                onEpochEnd: (epoch, logs) => {
-                    updateStatus(`Training epoch ${epoch + 1}/10 - loss: ${logs.loss.toFixed(4)}`);
-                }
-            }
-        });
-        
-        // Clean up tensors
-        tf.dispose([userTensor, movieTensor, ratingTensor]);
-        
-        // Update UI
-        updateStatus('Model training completed successfully!');
-        document.getElementById('predict-btn').disabled = false;
-        isTraining = false;
-        
-    } catch (error) {
-        console.error('Training error:', error);
-        updateStatus('Error training model: ' + error.message, true);
-        isTraining = false;
-    }
+// ---------------------------------------------------------------------------
+// TODO (HW3) — Item-Based CF.
+//
+// Return the top-K recommendations for the active user as an array of
+// { title, score }, sorted by score descending.
+//
+// Suggested steps (week3/readme.md section 5.5):
+//   1. for each movie the active user has rated, compute the item-item
+//      similarity against every other movie's rating column
+//   2. for each candidate movie the active user has NOT rated, aggregate the
+//      similarities from the rated movies, weighted by the user's rating
+//   3. sort and take the top K
+// ---------------------------------------------------------------------------
+function getItemBasedRecommendations(activeUserId, topK = 5) {
+    // your implementation here
+    return [];
 }
 
-async function predictRating() {
-    if (isTraining) {
-        updateResult('Model is still training. Please wait...', 'medium');
+// Provided — read the selected user and render both recommendation lists
+function getRecommendations() {
+    const selectElement = document.getElementById('user-select');
+    const userId = parseInt(selectElement.value, 10);
+
+    if (isNaN(userId)) {
+        renderList('user-based-result', [], 'Please select a user first.');
+        renderList('item-based-result', [], 'Please select a user first.');
         return;
     }
-    
-    const userId = parseInt(document.getElementById('user-select').value);
-    const movieId = parseInt(document.getElementById('movie-select').value);
-    
-    if (!userId || !movieId) {
-        updateResult('Please select both a user and a movie.', 'medium');
+
+    renderList('user-based-result', getUserBasedRecommendations(userId));
+    renderList('item-based-result', getItemBasedRecommendations(userId));
+}
+
+// Provided — render a list of { title, score } into the given element
+function renderList(elementId, items, message) {
+    const el = document.getElementById(elementId);
+
+    if (message) {
+        el.innerHTML = `<p>${message}</p>`;
         return;
     }
-    
-    try {
-        // Create input tensors
-        const userTensor = tf.tensor2d([[userId]]);
-        const movieTensor = tf.tensor2d([[movieId]]);
-        
-        // Make prediction
-        const prediction = model.predict([userTensor, movieTensor]);
-        const rating = await prediction.data();
-        const predictedRating = rating[0];
-        
-        // Clean up tensors
-        tf.dispose([userTensor, movieTensor, prediction]);
-        
-        // Display result
-        const movie = movies.find(m => m.id === movieId);
-        const movieTitle = movie ? (movie.year ? `${movie.title} (${movie.year})` : movie.title) : `Movie ${movieId}`;
-        
-        let ratingClass = 'medium';
-        if (predictedRating >= 4) ratingClass = 'high';
-        else if (predictedRating <= 2) ratingClass = 'low';
-        
-        updateResult(
-            `Predicted rating for User ${userId} on "${movieTitle}": <strong>${predictedRating.toFixed(2)}/5</strong>`,
-            ratingClass
-        );
-        
-    } catch (error) {
-        console.error('Prediction error:', error);
-        updateResult('Error making prediction: ' + error.message, 'low');
+
+    if (!items || items.length === 0) {
+        el.innerHTML = '<p>No recommendations. (Implement the TODO above.)</p>';
+        return;
     }
-}
 
-// UI helper functions
-function updateStatus(message, isError = false) {
-    const statusElement = document.getElementById('status');
-    statusElement.textContent = message;
-    statusElement.style.borderLeftColor = isError ? '#e74c3c' : '#3498db';
-    statusElement.style.background = isError ? '#fdedec' : '#f8f9fa';
-}
-
-function updateResult(message, className = '') {
-    const resultElement = document.getElementById('result');
-    resultElement.innerHTML = message;
-    resultElement.className = `result ${className}`;
+    const entries = items
+        .map(item => `<li>${item.title} &mdash; ${Number(item.score).toFixed(3)}</li>`)
+        .join('');
+    el.innerHTML = `<ul>${entries}</ul>`;
 }
