@@ -3,31 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
     <title>Collaborative Filtering Movie Recommender</title>
+    <!-- Empty data URI: suppresses the automatic /favicon.ico request so the
+         console stays clean. The app deliberately ships no icon asset. -->
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Collaborative Filtering Movie Recommender</h1>
-        <p>Select a user, and we will recommend movies two ways: by similar users (User-Based CF) and by similar movies (Item-Based CF).</p>
+    <a class="skip-link" href="#result-box">Skip to recommendations</a>
 
-        <div class="controls">
-            <select id="user-select">
-                <option value="" disabled selected>Select a user</option>
-            </select>
-            <button id="recommend-btn" onclick="getRecommendations()">Get Recommendations</button>
-        </div>
+    <div class="page">
 
-        <div id="result-box">
-            <div class="result-column">
-                <h2>User-Based CF</h2>
-                <div id="user-based-result"><p>Please wait, loading data...</p></div>
+        <!-- ================= HEADER ================= -->
+        <header class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Collaborative Filtering</p>
+                <h1>MovieLens 100K Recommender</h1>
+                <p class="lede">User-Based vs Item-Based recommendation with support-aware cosine similarity.</p>
             </div>
-            <div class="result-column">
-                <h2>Item-Based CF</h2>
-                <div id="item-based-result"><p>Please wait, loading data...</p></div>
-            </div>
-        </div>
+            <!-- Populated from the loaded dataset by renderDatasetChips(). -->
+            <ul class="chips" id="dataset-chips" aria-label="Dataset summary">
+                <li class="chip chip-pending">Loading dataset&hellip;</li>
+            </ul>
+        </header>
+
+        <main>
+
+            <!-- ================= CONTROLS ================= -->
+            <section class="card controls-card" aria-labelledby="controls-title">
+                <div class="controls">
+                    <div class="field">
+                        <label id="controls-title" for="user-select">Active user</label>
+                        <select id="user-select" aria-describedby="controls-hint">
+                            <option value="" disabled selected>Select a user</option>
+                        </select>
+                    </div>
+                    <div class="field field-action">
+                        <button id="recommend-btn" type="button" onclick="getRecommendations()">
+                            <span class="btn-label">Generate recommendations</span>
+                        </button>
+                        <p class="helper" id="controls-hint">Both models recommend unseen movies for the same user.</p>
+                    </div>
+                </div>
+                <p class="global-status" id="global-status" role="status" aria-live="polite"></p>
+            </section>
+
+            <!-- ================= THE TWO METHOD CARDS ================= -->
+            <section id="result-box" aria-label="Recommendation results">
+                <div class="result-column card">
+                    <header class="card-head">
+                        <div class="card-head-text">
+                            <h2>User-Based CF</h2>
+                            <p class="card-sub">Movies liked by your 20 nearest neighbours</p>
+                        </div>
+                        <span class="badge-runtime" id="user-based-runtime">&mdash;</span>
+                    </header>
+                    <p class="card-status" id="user-based-status" role="status" aria-live="polite"></p>
+                    <div id="user-based-result" class="card-body" role="region" aria-label="User-Based CF top recommendations">
+                        <p>Please wait, loading data&hellip;</p>
+                    </div>
+                </div>
+
+                <div class="result-column card">
+                    <header class="card-head">
+                        <div class="card-head-text">
+                            <h2>Item-Based CF</h2>
+                            <p class="card-sub">Movies similar to the ones you rated</p>
+                        </div>
+                        <span class="badge-runtime" id="item-based-runtime">&mdash;</span>
+                    </header>
+                    <p class="card-status" id="item-based-status" role="status" aria-live="polite"></p>
+                    <div id="item-based-result" class="card-body" role="region" aria-label="Item-Based CF top recommendations">
+                        <p>Please wait, loading data&hellip;</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= COMPARISON ================= -->
+            <section class="card comparison" id="comparison" aria-labelledby="comparison-title">
+                <h2 id="comparison-title" class="section-title">Comparison</h2>
+                <div class="metric-grid" id="comparison-grid">
+                    <p class="placeholder">Select a user and generate recommendations to compare both approaches.</p>
+                </div>
+                <p class="footnote">Runtimes and evidence counts describe this machine and browser only.
+                    Neither a lower runtime nor a higher evidence count implies a more accurate model:
+                    this app has no held-out evaluation, so it makes no accuracy claim.</p>
+            </section>
+
+            <!-- ================= EXPLANATION ================= -->
+            <section class="card callout" aria-labelledby="callout-title">
+                <h2 id="callout-title" class="section-title">Why support weighting?</h2>
+                <p class="callout-body">For a single positive co-rating, raw cosine is 1.0 regardless of rating
+                    magnitude &mdash; a user who rated a movie&nbsp;1 and another who rated it&nbsp;5 look
+                    <em>perfectly</em> alike. So we require at least <strong>3</strong> common ratings and shrink
+                    similarity by <strong>n&nbsp;/&nbsp;(n&nbsp;+&nbsp;10)</strong>, which is near zero on a
+                    coincidence and approaches one as evidence accumulates.</p>
+            </section>
+
+            <!-- ================= TECHNICAL DIAGNOSTICS ================= -->
+            <section class="card diagnostics" id="diagnostics" aria-labelledby="diagnostics-title">
+                <h2 id="diagnostics-title" class="section-title">Technical diagnostics</h2>
+                <div id="diagnostics-body">
+                    <p class="placeholder">Diagnostics appear here once the dataset has loaded.</p>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="foot">
+            <p>Vanilla HTML, CSS and JavaScript &middot; no build step, no external libraries.
+               Ratings are used only to compute similarity; no data leaves the browser.</p>
+        </footer>
     </div>
 
     <script src="data.js"></script>
