@@ -245,10 +245,25 @@ input[type="range"]:focus-visible {
   background: #eef4fa;
 }
 
+/* Selected rule: visible focus/selection state for mouse and keyboard alike. */
+.rules-table tbody tr[aria-selected="true"] {
+  background: #e3edf7;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .results-count {
   color: var(--muted);
   font-size: 0.9rem;
   margin: 0;
+}
+
+/* The rules table has eight columns and long product names, and the worked
+   example table has eight columns of short values, so their min-content widths
+   can exceed the grid column. Contain that overflow inside their own panels at
+   every viewport width, so the page itself never scrolls sideways. */
+#results,
+#worked-example {
+  overflow-x: auto;
 }
 
 .empty-state {
@@ -305,5 +320,20 @@ input[type="range"]:focus-visible {
 
   .sidebar {
     position: static;
+  }
+
+  /* Keep the wide 8-column rules table inside its own scroll container so the
+     page itself never overflows horizontally on a phone. */
+  .rules-table {
+    min-width: 44rem;
+  }
+
+  .rule-metrics {
+    grid-template-columns: 1fr;
+    gap: 0.1rem 0;
+  }
+
+  .rule-metrics dt {
+    margin-top: 0.4rem;
   }
 }

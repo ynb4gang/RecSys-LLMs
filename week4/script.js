@@ -9,7 +9,8 @@
  * "minimum confidence") plus a "Run rules" button. Because nothing is fetched,
  * the page works from a `file://` URL with no server.
  *
- * WHAT YOU MUST IMPLEMENT (`TODO(hw4)` — each stub throws until you write it):
+ * HW4 FUNCTIONS (`TODO(hw4)` stubs in the starter — all seven are implemented
+ * below; the marker strings remain only where the test harness looks for them):
  *   1. `dedupeBasket`         — unique stock codes in a basket, first-appearance order.
  *   2. `countItemset`         — baskets containing every requested stock (`0` if any is absent).
  *   3. `computeSupport`       — support = count(A union B) / N, guarded when N = 0.
@@ -73,7 +74,9 @@ const TRANSACTIONS = data.baskets.map((basket) =>
  */
 let DATASET_INDEX = null;
 
-/** Number of baskets (the `N` used by support and lift). */
+/**
+ * Number of baskets (the `N` used by support and lift).
+ */
 let N = data.N_BASKETS;
 
 /**
@@ -103,8 +106,8 @@ let N = data.N_BASKETS;
 // ---------------------------------------------------------------------------
 // Provided helpers and student stubs
 //
-// Functions carrying a `TODO(hw4)` marker are stubs you must implement; every
-// other function in this file is scaffolding and should be left as-is.
+// Functions that were `TODO(hw4)` stubs in the starter are now implemented;
+// every other function in this file is scaffolding and was left as provided.
 // ---------------------------------------------------------------------------
 
 /**
@@ -167,7 +170,7 @@ function asIndex(basketsOrIndex) {
 /**
  * Count the baskets that contain every stock code in `stocks`.
  *
- * TODO(hw4): build (or reuse) a basket -> stock inverted index, intersect the
+ * HW4 solution: build (or reuse) a basket -> stock inverted index, intersect the
  * posting lists of the requested stocks, and return the size of the
  * intersection.
  *
@@ -179,13 +182,57 @@ function asIndex(basketsOrIndex) {
  *  - A stock repeated within one basket must be counted at most once. Dedupe the
  *    request before intersecting.
  *
+ * Algorithm:
+ *  1. normalise the request through `dedupeBasket` (so `["A","A","B"]` behaves
+ *     exactly like `["A","B"]`);
+ *  2. look up each posting list — a missing one means an unknown stock, so the
+ *     answer is `0`;
+ *  3. sort the posting lists by ascending size so the accumulator stays small;
+ *  4. intersect smallest-first and return the final size.
+ *
+ * A stock repeated *inside* one basket cannot inflate the count: posting lists
+ * are `Set<number>` of basket ids, so a repeated code maps to the same id and
+ * `Set.add` collapses it.
+ *
+ * Cost is O(sum of the posting-list lengths actually touched) instead of a
+ * O(N * k) scan over all 17,080 baskets per candidate.
+ *
  * @param {BasketIndex|Array<Array<Item|string>>} basketsOrIndex
  * @param {Array<string|Item>} stocks
  * @returns {number} count(A) for a single-element `stocks`, count(A union B) for two.
  */
 function countItemset(basketsOrIndex, stocks) {
-  // TODO(hw4): intersect the posting lists and return the number of baskets.
-  throw new Error("TODO(hw4): countItemset is not implemented yet.");
+  const index = asIndex(basketsOrIndex);
+  if (!index || !index.byStock) return 0;
+
+  // 1. Normalise + dedupe the request. Non-arrays / malformed entries degrade
+  //    to an empty request, which the next step reports as 0.
+  const requested = Array.isArray(stocks) ? dedupeBasket(stocks) : [];
+  if (requested.length === 0) return 0;
+
+  // 2. Look up every posting list first: one unknown stock makes the whole
+  //    itemset uncountable, so answer 0 rather than intersecting partial data.
+  const postingLists = [];
+  for (const stock of requested) {
+    const posting = index.byStock.get(stock);
+    if (!posting) return 0;
+    postingLists.push(posting);
+  }
+
+  // 3. Seed from the smallest posting list.
+  postingLists.sort((a, b) => a.size - b.size);
+  let intersection = new Set(postingLists[0]);
+
+  // 4. Intersect smallest-first, bailing out as soon as it empties.
+  for (let i = 1; i < postingLists.length && intersection.size > 0; i++) {
+    const next = new Set();
+    const other = postingLists[i];
+    for (const basketId of intersection) {
+      if (other.has(basketId)) next.add(basketId);
+    }
+    intersection = next;
+  }
+  return intersection.size;
 }
 
 /**
@@ -215,7 +262,7 @@ function countPair(basketsOrIndex, stockA, stockB) {
  * Remove repeated item identities from a raw basket, keeping first-appearance
  * order. A basket is a set of items, so duplicates must not be counted twice.
  *
- * TODO(hw4): walk the input once, map each entry to its stock code with the
+ * HW4 solution: walk the input once, map each entry to its stock code with the
  * provided `stockOf` helper, and return each distinct code the first time it
  * appears.
  *
@@ -223,19 +270,42 @@ function countPair(basketsOrIndex, stockA, stockB) {
  *  - An empty input returns `[]`.
  *  - The input may mix plain strings and `{ stock, description }` objects.
  *  - Only the stock code is returned; the description is dropped.
+ *  - A malformed entry (anything whose stock identity is not a non-empty
+ *    string) is SKIPPED rather than emitted. This is the one deterministic
+ *    defensive behaviour chosen for bad input, so `undefined` / `null` / `""`
+ *    codes can never reach the inverted index and silently become an
+ *    `"undefined"` map key.
  *
  * @param {Array<string|Item>} rawItems
  * @returns {Array<string>} unique stock codes, in first-appearance order.
  */
 function dedupeBasket(rawItems) {
-  // TODO(hw4): return the unique stock codes in first-appearance order.
-  throw new Error("TODO(hw4): dedupeBasket is not implemented yet.");
+  /** @type {string[]} */
+  const unique = [];
+  /** @type {Set<string>} */
+  const seen = new Set();
+  if (!Array.isArray(rawItems)) return unique;
+
+  for (const entry of rawItems) {
+    let stock;
+    try {
+      stock = stockOf(entry);
+    } catch (error) {
+      stock = undefined; // e.g. a null / undefined entry
+    }
+    // Reject anything that is not a usable stock-code identity.
+    if (typeof stock !== "string" || stock === "") continue;
+    if (seen.has(stock)) continue;
+    seen.add(stock);
+    unique.push(stock);
+  }
+  return unique;
 }
 
 /**
  * Compute support as `jointCount / n`.
  *
- * TODO(hw4): return the fraction and flag the `n === 0` case.
+ * HW4 solution: return the fraction and flag the `n === 0` case.
  *
  * Contract:
  *  - `defined: true` with `value = jointCount / n` when `n > 0`.
@@ -246,14 +316,14 @@ function dedupeBasket(rawItems) {
  * @returns {{value: number, defined: boolean}} `defined` is false when `n === 0`.
  */
 function computeSupport(jointCount, n) {
-  // TODO(hw4): support = jointCount / n, undefined when n === 0.
-  throw new Error("TODO(hw4): computeSupport is not implemented yet.");
+  if (typeof n !== "number" || !(n > 0)) return { value: 0, defined: false };
+  return { value: jointCount / n, defined: true };
 }
 
 /**
  * Compute confidence as `jointCount / antecedentCount`.
  *
- * TODO(hw4): return the fraction and flag the `antecedentCount === 0` case.
+ * HW4 solution: return the fraction and flag the `antecedentCount === 0` case.
  *
  * Contract:
  *  - `defined: true` with `value = jointCount / antecedentCount` when count(A) > 0.
@@ -265,14 +335,16 @@ function computeSupport(jointCount, n) {
  * @returns {{value: number, defined: boolean}}
  */
 function computeConfidence(jointCount, antecedentCount) {
-  // TODO(hw4): confidence = jointCount / antecedentCount, undefined when count(A) === 0.
-  throw new Error("TODO(hw4): computeConfidence is not implemented yet.");
+  if (typeof antecedentCount !== "number" || !(antecedentCount > 0)) {
+    return { value: 0, defined: false };
+  }
+  return { value: jointCount / antecedentCount, defined: true };
 }
 
 /**
  * Compute lift as `confidence / (consequentCount / n)`.
  *
- * TODO(hw4): divide the incoming confidence by the consequent's baseline rate.
+ * HW4 solution: divide the incoming confidence by the consequent's baseline rate.
  *
  * Contract:
  *  - `defined: true` with `value = confidence.value / (consequentCount / n)`
@@ -287,8 +359,16 @@ function computeConfidence(jointCount, antecedentCount) {
  * @returns {{value: number, defined: boolean}}
  */
 function computeLift(confidence, consequentCount, n) {
-  // TODO(hw4): lift = confidence / (consequentCount / n), guarded.
-  throw new Error("TODO(hw4): computeLift is not implemented yet.");
+  // The confidence never happened, so there is nothing to lift.
+  if (!confidence || confidence.defined !== true) return { value: 0, defined: false };
+  if (typeof n !== "number" || !(n > 0)) return { value: 0, defined: false };
+  // The consequent never occurs, so its baseline rate is 0 and the division blows up.
+  if (typeof consequentCount !== "number" || !(consequentCount > 0)) {
+    return { value: 0, defined: false };
+  }
+  const baseline = consequentCount / n;
+  if (!(baseline > 0)) return { value: 0, defined: false };
+  return { value: confidence.value / baseline, defined: true };
 }
 
 /**
@@ -316,8 +396,11 @@ function validateThresholds(minSupport, minConfidence) {
 /**
  * Mine all frequent itemsets whose support is at least `minSupport`.
  *
- * TODO(hw4): implement Apriori (level-wise candidate generation with a
- * downward-closure pruning step) or any equivalent frequent-itemset miner.
+ * HW4 solution: genuine level-wise Apriori — join two frequent (k-1)-itemsets
+ * that share their first k-2 items, canonicalise the candidate, drop duplicates,
+ * prune any candidate whose (k-1)-subsets are not all frequent (downward
+ * closure), then count survivors by posting-list intersection. A level that
+ * yields no frequent itemset terminates the run.
  *
  * Contract:
  *  - Return one entry per frequent itemset: `{ items, count, support }`, where
@@ -328,22 +411,145 @@ function validateThresholds(minSupport, minConfidence) {
  *    17,080 baskets is slow — build your own occurrence/index structures.
  *  - `generateRules` consumes this exact shape, so keep the field names stable.
  *
+ * Threshold arithmetic (important). `Math.floor(minSupport * N)` must NOT be the
+ * acceptance test: it rounds the cutoff *down* and admits below-threshold
+ * itemsets (at 3% and N = 17,080, `floor(512.4) = 512`, which admits support
+ * 2.9977% into a table advertised as ">= 3%"). So the integer cutoff is used
+ * only as a cheap pruning hint, and the *final* guard re-derives the support as
+ * `count / N` and compares that. Boundary equality is inclusive, so an itemset
+ * whose support equals `minSupport` exactly survives.
+ *
+ * Determinism: `items` is always sorted with `localeCompare`, the canonical key
+ * is derived from that sorted array, candidates are generated in sorted order,
+ * and the result is sorted by (size, canonical key). Two runs on the same input
+ * therefore produce byte-identical output.
+ *
  * @param {Array<Array<Item|string>>} transactions baskets
  * @param {number} minSupport minimum support fraction in `(0, 1]`
  * @returns {Array<{items: string[], count: number, support: number}>} frequent itemsets
  */
 function findFrequentItemsets(transactions, minSupport) {
-  // TODO(hw4): implement Apriori (or an equivalent frequent-itemset miner).
-  throw new Error("TODO(hw4): findFrequentItemsets is not implemented yet.");
+  const threshold = validateThresholds(minSupport, 1);
+  if (!threshold.ok) return [];
+
+  const index = asIndex(transactions);
+  const n = index.n;
+  if (!(n > 0)) return [];
+
+  /** Canonical, stable string key for an itemset (its items are pre-sorted). */
+  const keyOf = (items) => items.join("\u0001");
+  // Integer pruning hint only. The authoritative test is `count / n >= minSupport`.
+  const minCountHint = Math.ceil(minSupport * n - 1e-9);
+
+  // ---- Level 1 -----------------------------------------------------------
+  // Derived from posting-list sizes, so no basket scan is needed.
+  /** @type {Array<{items: string[], count: number}>} */
+  let level = [];
+  for (const [stock, posting] of index.byStock) {
+    if (posting.size < minCountHint) continue;
+    if (!(posting.size / n >= minSupport)) continue; // final guard
+    level.push({ items: [stock], count: posting.size });
+  }
+  level.sort((a, b) => keyOf(a.items).localeCompare(keyOf(b.items)));
+
+  /** @type {Array<{items: string[], count: number, support: number}>} */
+  const frequent = [];
+  for (const entry of level) {
+    frequent.push({ ...entry, support: entry.count / n });
+  }
+
+  // ---- Levels k >= 2 -----------------------------------------------------
+  for (let k = 2; level.length > 0; k++) {
+    // Every (k-1)-subset of a candidate must be in the previous level.
+    const previousKeys = new Set(level.map((entry) => keyOf(entry.items)));
+
+    // --- join + canonicalise + dedupe + prune ---
+    const candidates = new Map();
+    for (let i = 0; i < level.length; i++) {
+      for (let j = i + 1; j < level.length; j++) {
+        const left = level[i].items;
+        const right = level[j].items;
+
+        // Apriori join: the pair must share its first k-2 items.
+        let sharePrefix = true;
+        for (let p = 0; p < k - 2; p++) {
+          if (left[p] !== right[p]) {
+            sharePrefix = false;
+            break;
+          }
+        }
+        if (!sharePrefix) continue;
+
+        // The new item must extend the prefix; anything else was already joined.
+        if (left[k - 2] === right[k - 2]) continue;
+
+        // Canonicalise: a candidate is a SET of stock codes.
+        const items = [...new Set([...left, right[k - 2]])].sort((a, b) =>
+          a.localeCompare(b),
+        );
+        if (items.length !== k) continue;
+
+        // Downward-closure pruning.
+        let allSubsetsFrequent = true;
+        for (let d = 0; d < items.length; d++) {
+          const subset =
+            d === 0 ? items.slice(1) : [...items.slice(0, d), ...items.slice(d + 1)];
+          if (!previousKeys.has(keyOf(subset))) {
+            allSubsetsFrequent = false;
+            break;
+          }
+        }
+        if (!allSubsetsFrequent) continue;
+
+        candidates.set(keyOf(items), items); // dedupe
+      }
+    }
+    if (candidates.size === 0) break;
+
+    // --- count survivors by posting-list intersection only ---
+    /** @type {Array<{items: string[], count: number}>} */
+    const next = [];
+    for (const items of candidates.values()) {
+      const count = countItemset(index, items);
+      if (count < minCountHint) continue; // cheap prune
+      if (!(count / n >= minSupport)) continue; // FINAL guard
+      next.push({ items, count });
+    }
+    if (next.length === 0) break; // terminate: nothing frequent at this level
+
+    next.sort((a, b) => keyOf(a.items).localeCompare(keyOf(b.items)));
+    for (const entry of next) {
+      frequent.push({ ...entry, support: entry.count / n });
+    }
+    level = next;
+  }
+
+  // Deterministic overall order: size ascending, then canonical key.
+  frequent.sort((a, b) => {
+    if (a.items.length !== b.items.length) return a.items.length - b.items.length;
+    return keyOf(a.items).localeCompare(keyOf(b.items));
+  });
+  return frequent;
 }
 
 /**
  * Turn frequent itemsets into association rules and keep the ones whose
  * confidence is at least `minConfidence`.
  *
- * TODO(hw4): for each frequent itemset, split it into a non-empty antecedent `A`
- * and a non-empty, disjoint consequent `B` in BOTH directions, compute the
- * confidence for each direction, and keep the rules that pass the threshold.
+ * HW4 solution: for each frequent itemset, split it into a non-empty antecedent
+ * `A` and a non-empty, disjoint consequent `B = X \ A`, compute the confidence
+ * for each split, and keep the rules that pass the threshold.
+ *
+ * EVERY non-empty proper antecedent is enumerated with a bitmask, so a 3-item
+ * itemset yields all six directions:
+ *
+ *     A -> BC      B -> AC      C -> AB
+ *     AB -> C      AC -> B      BC -> A
+ *
+ * A pairwise-only miner (only `A -> B` / `B -> A`) would silently drop the
+ * multi-item antecedents and consequents, which is a large share of the real
+ * rule table — so the mask runs from `1` to `2^k - 2`, excluding the empty and
+ * the full subset and guaranteeing both sides are non-empty.
  *
  * Contract:
  *  - Each returned rule follows the `Rule` shape documented at the top of this
@@ -355,14 +561,142 @@ function findFrequentItemsets(transactions, minSupport) {
  *  - Keep only rules with `confidence >= minConfidence`. `count(A)` is non-zero
  *    for every generated rule, so the confidence is always defined.
  *
+ * NOTE: support and confidence are the only filters here. Rules with
+ * `lift <= 1` are deliberately RETAINED so they can be inspected as
+ * misleading rules; the `lift > 1` restriction is a downstream business-analysis
+ * step, not part of mining.
+ *
+ * Counts come from the supplied `frequentItemsets` alone, never from a dataset
+ * index or from whichever collection happened to be mined most recently.
+ *
+ * Downward closure guarantees that every non-empty proper subset of a frequent
+ * itemset is itself frequent, so a canonical lookup built from the given list
+ * already contains `count(A)` and `count(B)` for every split of every itemset X.
+ * That makes this a pure function of its two arguments: it cannot be affected by
+ * call order, by a later `findFrequentItemsets` call, or by any global state.
+ * (An earlier version read counts from a recorded mining source, which silently
+ * returned zero rules for the page dataset whenever a fixture had been mined in
+ * between.)
+ *
+ * The three metrics then need no `N` at all:
+ *   support(A -> B)    = count(A u B) / N = support(X)      (from the lookup)
+ *   confidence(A -> B) = count(X) / count(A)                (from the lookup)
+ *   lift(A -> B)       = confidence / [ count(B) / N ]
+ *                     = confidence / support(B)             (from the lookup)
+ * because support(B) is exactly count(B) / N as computed by the miner.
+ *
+ * If a required subset is unexpectedly absent (a caller passing a truncated
+ * list), that split is SKIPPED deterministically rather than counted against
+ * unrelated data. Every subset of a genuine Apriori result is present, so this
+ * never fires for well-formed input.
+ *
  * @param {Array<{items: string[], count: number, support: number}>} frequentItemsets
  * @param {number} minConfidence minimum confidence fraction in `(0, 1]`
  * @returns {Rule[]}
  */
 function generateRules(frequentItemsets, minConfidence) {
-  // TODO(hw4): generate candidate rules from each frequent itemset, compute
-  // confidence in both directions, then keep the rules that pass the threshold.
-  throw new Error("TODO(hw4): generateRules is not implemented yet.");
+  if (!Array.isArray(frequentItemsets) || frequentItemsets.length === 0) return [];
+  if (!(typeof minConfidence === "number" && Number.isFinite(minConfidence))) return [];
+
+  const keyOf = (items) => items.join("\u0001");
+
+  // ---- canonical lookup: canonical(items) -> { count, support } -------------
+  /** @type {Map<string, {items: string[], count: number, support: number}>} */
+  const lookup = new Map();
+  for (const itemset of frequentItemsets) {
+    if (!itemset || typeof itemset.count !== "number" || !Number.isFinite(itemset.count)) {
+      continue;
+    }
+    const canonical = Array.isArray(itemset.items)
+      ? dedupeBasket(itemset.items)
+      : [];
+    if (canonical.length === 0) continue;
+    canonical.sort((a, b) => a.localeCompare(b)); // canonical order
+    lookup.set(keyOf(canonical), {
+      items: canonical,
+      count: itemset.count,
+      support:
+        typeof itemset.support === "number" && Number.isFinite(itemset.support)
+          ? itemset.support
+          : 0,
+    });
+  }
+  if (lookup.size === 0) return [];
+
+  /** @type {Rule[]} */
+  const rules = [];
+  const seen = new Set();
+
+  for (const itemset of lookup.values()) {
+    const items = itemset.items;
+    const size = items.length;
+    if (size < 2) continue; // a 1-itemset has no non-empty proper split
+
+    for (let mask = 1; mask < (1 << size) - 1; mask++) {
+      /** @type {string[]} */
+      const antecedent = [];
+      /** @type {string[]} */
+      const consequent = [];
+      for (let bit = 0; bit < size; bit++) {
+        if (mask & (1 << bit)) antecedent.push(items[bit]);
+        else consequent.push(items[bit]);
+      }
+      // Both sides are non-empty by construction; keep the guard explicit.
+      if (antecedent.length === 0 || consequent.length === 0) continue;
+
+      const ruleKey = `${keyOf(antecedent)}|${keyOf(consequent)}`;
+      if (seen.has(ruleKey)) continue; // no duplicate rules
+
+      // Counts come only from the supplied frequent itemsets.
+      const antecedentEntry = lookup.get(keyOf(antecedent));
+      const consequentEntry = lookup.get(keyOf(consequent));
+      if (!antecedentEntry || !consequentEntry) continue; // truncated input
+
+      const antecedentCount = antecedentEntry.count;
+      const consequentCount = consequentEntry.count;
+      if (!(antecedentCount > 0)) continue; // cannot happen for a frequent subset
+
+      const confidence = computeConfidence(itemset.count, antecedentCount);
+      if (!confidence.defined) continue;
+      if (!(confidence.value >= minConfidence)) continue; // inclusive boundary
+
+      // support(X) = count(X) / N, supplied by the miner.
+      const support = itemset.support;
+      // lift = confidence / support(B), and support(B) = count(B) / N.
+      const baseline = consequentEntry.support;
+      const lift =
+        baseline > 0
+          ? { value: confidence.value / baseline, defined: true }
+          : { value: 0, defined: false };
+
+      seen.add(ruleKey);
+      rules.push({
+        antecedent,
+        consequent,
+        jointCount: itemset.count,
+        antecedentCount,
+        consequentCount,
+        support,
+        confidence: confidence.value,
+        lift: lift.value,
+      });
+    }
+  }
+
+  // Deterministic order: antecedent length, antecedent lexicographic,
+  // consequent length, consequent lexicographic.
+  rules.sort((a, b) => {
+    if (a.antecedent.length !== b.antecedent.length) {
+      return a.antecedent.length - b.antecedent.length;
+    }
+    const byA = keyOf(a.antecedent).localeCompare(keyOf(b.antecedent));
+    if (byA !== 0) return byA;
+    if (a.consequent.length !== b.consequent.length) {
+      return a.consequent.length - b.consequent.length;
+    }
+    return keyOf(a.consequent).localeCompare(keyOf(b.consequent));
+  });
+  return rules;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +788,9 @@ function tinyWorkedExample() {
 function enrichRule(rule, index) {
   const antecedent = (rule.antecedent || []).map(stockOf);
   const consequent = (rule.consequent || []).map(stockOf);
-  const n = index.n || N;
+  // Nullish, not `||`: an empty index has n === 0, which is falsy but valid
+  // and must not silently fall back to the global N.
+  const n = index && index.n !== undefined ? index.n : N;
   const jointCount =
     typeof rule.jointCount === "number"
       ? rule.jointCount
@@ -489,8 +825,18 @@ function enrichRule(rule, index) {
 /**
  * Swap the antecedent and consequent of a rule and recompute the metrics.
  *
- * Confidence is not symmetric, so `B -> A` usually has a different confidence
- * and support value from `A -> B` even though lift is unchanged.
+ * Confidence is NOT symmetric: `B -> A` usually has a different confidence from
+ * `A -> B`, because the denominator `count(A)` becomes `count(B)`.
+ *
+ * Support and lift ARE symmetric and must not change:
+ *   - `support(A -> B) = count(A union B) / N`, and `A union B === B union A`,
+ *     so `support(A -> B) === support(B -> A)`.
+ *   - `lift(A -> B) = (count(A union B) / count(A)) / (count(B) / N)`
+ *                = count(A union B) * N / (count(A) * count(B)`,
+ *     which is symmetric in A and B, so `lift(A -> B) === lift(B -> A)`.
+ *
+ * (An earlier version of this comment wrongly claimed support also changed with
+ * direction. It does not, and the renderer below demonstrates exactly that.)
  *
  * @param {Rule} rule
  * @param {BasketIndex} index
@@ -513,10 +859,14 @@ function reverseRule(rule, index) {
 /**
  * Format a fraction as a percentage with two decimals.
  *
+ * Non-finite input (NaN / Infinity) returns `"n/a"`, matching `formatMetric`, so
+ * an undefined metric can never surface as a literal `"NaN%"` in the table.
+ *
  * @param {number} fraction
  * @returns {string}
  */
 function formatPercent(fraction) {
+  if (!Number.isFinite(fraction)) return "n/a";
   return `${(fraction * 100).toFixed(2)}%`;
 }
 
@@ -608,8 +958,28 @@ function renderDatasetSummary(index, container) {
 }
 
 /**
+ * Reset the "Selected rule" panel back to its empty state.
+ *
+ * Called whenever a new rule table is rendered, so a selection made under the
+ * previous thresholds can never be left on screen describing a rule that is no
+ * longer in the current table.
+ *
+ * @param {HTMLElement|null} [container]
+ * @returns {void}
+ */
+function resetRuleDetail(container) {
+  const target = container || document.getElementById("rule-detail");
+  if (!target) return;
+  target.innerHTML =
+    '<p class="empty-state">Click a rule row to inspect it.</p>';
+}
+
+/**
  * Render the rule list into a table. Each row is clickable and shows the rule in
  * the detail panel.
+ *
+ * Rendering a new table always resets the detail panel, because the previously
+ * selected rule belongs to the previous threshold setting.
  *
  * @param {Rule[]} rules
  * @param {BasketIndex} [index]
@@ -620,6 +990,9 @@ function renderResults(rules, index, container) {
   const target = container || document.getElementById("results");
   if (!target) return;
   const activeIndex = index || DATASET_INDEX;
+
+  // A new table invalidates the previous selection.
+  if (!container) resetRuleDetail();
 
   if (!rules || rules.length === 0) {
     target.innerHTML =
@@ -666,6 +1039,11 @@ function renderResults(rules, index, container) {
   target.querySelectorAll("tr[data-rule-index]").forEach((row) => {
     const activate = () => {
       const rule = rules[Number(row.dataset.ruleIndex)];
+      // Mark the active row so the selection is visible as well as announced.
+      target.querySelectorAll("tr[data-rule-index]").forEach((other) => {
+        other.setAttribute("aria-selected", other === row ? "true" : "false");
+      });
+      row.scrollIntoView({ block: "nearest" });
       renderRuleDetail(rule, activeIndex);
     };
     row.addEventListener("click", activate);
@@ -1096,7 +1474,7 @@ function init() {
     }
   }
   if (status) {
-    status.textContent = `Dataset ready: ${N.toLocaleString("en-US")} baskets, ${data.N_ITEMS.toLocaleString("en-US")} distinct items. Implement the TODO(hw4) functions, then press “Run rules”.`;
+    status.textContent = `Dataset ready: ${N.toLocaleString("en-US")} baskets, ${data.N_ITEMS.toLocaleString("en-US")} distinct items. Set the thresholds and press “Run rules”.`;
   }
 }
 
