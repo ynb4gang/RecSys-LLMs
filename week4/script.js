@@ -911,6 +911,34 @@ function describe(stock, index) {
   return description ? `${stock} — ${description}` : stock;
 }
 
+/**
+ * Render one itemset as HTML: the product description leads, and the stock code
+ * sits beneath it as secondary monospace text. Presentation only — the text
+ * content is exactly what `describe()` produces, so nothing is added or lost.
+ *
+ * @param {string[]} stocks
+ * @param {BasketIndex} index
+ * @param {boolean} [muted] render the description in muted ink
+ * @returns {string} HTML fragment
+ */
+function formatItemsetHtml(stocks, index, muted) {
+  if (!stocks || stocks.length === 0) {
+    return '<span class="item-cell__desc">(empty)</span>';
+  }
+  const className = muted ? "item-cell item-cell--muted" : "item-cell";
+  return stocks
+    .map((stock) => {
+      const description = descriptionByStock.get(stock);
+      const descHtml = description
+        ? `<span class="item-cell__desc">${escapeHtml(description)}</span>`
+        : "";
+      return `<span class="${className}"><span class="item-cell__code">${escapeHtml(
+        stock,
+      )}</span>${descHtml}</span>`;
+    })
+    .join(", ");
+}
+
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
@@ -932,7 +960,12 @@ function renderDatasetSummary(index, container) {
     .sort((a, b) => b.count - a.count || a.stock.localeCompare(b.stock));
   const topFive = counts.slice(0, 5);
 
-  const rows = topFive
+  const stat = (label, value) =>
+    `<div class="stat"><dt class="stat__label">${escapeHtml(
+      label,
+    )}</dt><dd class="stat__value">${escapeHtml(String(value))}</dd></div>`;
+
+  const topRows = topFive
     .map(
       (entry, i) =>
         `<tr><td class="num">${i + 1}</td><td>${escapeHtml(
@@ -941,17 +974,22 @@ function renderDatasetSummary(index, container) {
     )
     .join("");
 
+  const stats = [
+    stat("Baskets", index.n.toLocaleString("en-US")),
+    stat("Distinct items", index.byStock.size.toLocaleString("en-US")),
+    stat("Most frequent item", `${counts.length ? counts[0].count : 0}`),
+  ].join("");
+
   target.innerHTML = `
-    <p class="summary-line">
-      <strong>${index.n.toLocaleString("en-US")}</strong> baskets ·
-      <strong>${index.byStock.size.toLocaleString("en-US")}</strong> distinct items
-    </p>
+    <dl class="stats">${stats}</dl>
     <details class="top-items">
       <summary>Top 5 items by basket count</summary>
-      <table class="data-table">
-        <thead><tr><th scope="col">#</th><th scope="col">Item</th><th scope="col">Baskets</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th scope="col" class="num">#</th><th scope="col">Item</th><th scope="col" class="num">Baskets</th></tr></thead>
+          <tbody>${topRows}</tbody>
+        </table>
+      </div>
     </details>
     <p class="provenance">${escapeHtml(data.dataset_provenance)}</p>
   `;
@@ -1005,9 +1043,9 @@ function renderResults(rules, index, container) {
     .map((rule, rowIndex) => {
       const enriched = enrichRule(rule, activeIndex);
       return `
-        <tr tabindex="0" data-rule-index="${rowIndex}">
-          <td>${escapeHtml(formatItemset(enriched.antecedent, activeIndex))}</td>
-          <td>${escapeHtml(formatItemset(enriched.consequent, activeIndex))}</td>
+        <tr tabindex="0" data-rule-index="${rowIndex}" aria-selected="false">
+          <td class="cell-itemset">${formatItemsetHtml(enriched.antecedent, activeIndex)}</td>
+          <td class="cell-itemset">${formatItemsetHtml(enriched.consequent, activeIndex, true)}</td>
           <td class="num">${enriched.jointCount}</td>
           <td class="num">${enriched.antecedentCount}</td>
           <td class="num">${enriched.consequentCount}</td>
@@ -1019,18 +1057,18 @@ function renderResults(rules, index, container) {
     .join("");
 
   target.innerHTML = `
-    <p class="results-count">${rules.length} rule${rules.length === 1 ? "" : "s"}.</p>
+    <p class="results-count">${rules.length} rule${rules.length === 1 ? "" : "s"}</p>
     <table class="data-table rules-table">
       <thead>
         <tr>
           <th scope="col">Antecedent (A)</th>
           <th scope="col">Consequent (B)</th>
-          <th scope="col">count(A∪B)</th>
-          <th scope="col">count(A)</th>
-          <th scope="col">count(B)</th>
-          <th scope="col">support</th>
-          <th scope="col">confidence</th>
-          <th scope="col">lift</th>
+          <th scope="col" class="num">Joint</th>
+          <th scope="col" class="num">Count(A)</th>
+          <th scope="col" class="num">Count(B)</th>
+          <th scope="col" class="num">Support</th>
+          <th scope="col" class="num">Confidence</th>
+          <th scope="col" class="num">Lift</th>
         </tr>
       </thead>
       <tbody>${body}</tbody>
@@ -1043,7 +1081,6 @@ function renderResults(rules, index, container) {
       target.querySelectorAll("tr[data-rule-index]").forEach((other) => {
         other.setAttribute("aria-selected", other === row ? "true" : "false");
       });
-      row.scrollIntoView({ block: "nearest" });
       renderRuleDetail(rule, activeIndex);
     };
     row.addEventListener("click", activate);
@@ -1078,37 +1115,66 @@ function renderRuleDetail(rule, index, container) {
   const zeroDenominatorNotes = [];
   if (enriched.antecedentCount === 0) {
     zeroDenominatorNotes.push(
-      "count(A) = 0, so confidence(A → B) is undefined (division by zero).",
+      "count(A) = 0, so confidence(A \u2192 B) is undefined (division by zero).",
     );
   }
   if (enriched.consequentCount === 0) {
     zeroDenominatorNotes.push(
-      "count(B) = 0, so lift(A → B) is undefined (division by zero).",
+      "count(B) = 0, so lift(A \u2192 B) is undefined (division by zero).",
     );
   }
   const noteHtml = zeroDenominatorNotes.length
     ? `<p class="warning">${zeroDenominatorNotes.map(escapeHtml).join(" ")}</p>`
     : "";
 
+  const metric = (label, value, note) => `
+    <div class="metric">
+      <p class="metric__label">${escapeHtml(label)}</p>
+      <p class="metric__value">${escapeHtml(String(value))}</p>
+      <p class="metric__note">${escapeHtml(note)}</p>
+    </div>`;
+
+  const evidence = (label, value) => `
+    <div>
+      <p class="evidence__label">${escapeHtml(label)}</p>
+      <p class="evidence__value">${escapeHtml(String(value))}</p>
+    </div>`;
+
+  const side = (label, stocks) => `
+    <div class="rule-side">
+      <p class="rule-side__label">${escapeHtml(label)}</p>
+      ${formatItemsetHtml(stocks, activeIndex, label.indexOf("B") !== -1)}
+    </div>`;
+
   target.innerHTML = `
-    <dl class="rule-metrics">
-      <dt>Antecedent (A)</dt><dd>${escapeHtml(formatItemset(enriched.antecedent, activeIndex))}</dd>
-      <dt>Consequent (B)</dt><dd>${escapeHtml(formatItemset(enriched.consequent, activeIndex))}</dd>
-      <dt>count(A∪B)</dt><dd class="num">${enriched.jointCount}</dd>
-      <dt>count(A)</dt><dd class="num">${enriched.antecedentCount}</dd>
-      <dt>count(B)</dt><dd class="num">${enriched.consequentCount}</dd>
-      <dt>support</dt><dd class="num">${formatPercent(enriched.support)}</dd>
-      <dt>confidence</dt><dd class="num">${formatPercent(enriched.confidence)}</dd>
-      <dt>lift</dt><dd class="num">${formatMetric(enriched.lift)}</dd>
+    <div class="rule-flow">
+      ${side("Antecedent (A)", enriched.antecedent)}
+      <p class="rule-arrow" aria-hidden="true">&#8595;</p>
+      ${side("Consequent (B)", enriched.consequent)}
+    </div>
+
+    <div class="metric-grid">
+      ${metric("Support", formatPercent(enriched.support), "Share of all baskets containing the full itemset.")}
+      ${metric("Confidence", formatPercent(enriched.confidence), "P(B | A): share of A baskets that also contain B.")}
+      ${metric("Lift", formatMetric(enriched.lift), "Confidence divided by the baseline frequency of B.")}
+    </div>
+
+    <dl class="evidence">
+      ${evidence("Joint baskets", enriched.jointCount)}
+      ${evidence("Count(A)", enriched.antecedentCount)}
+      ${evidence("Count(B)", enriched.consequentCount)}
     </dl>
+
     <p class="comparison">
-      Reverse direction (B → A): confidence
+      Reverse direction (B \u2192 A): confidence
       <strong>${formatPercent(reversed.confidence)}</strong>, lift
       <strong>${formatMetric(reversed.lift)}</strong>.
-      Confidence changes with direction; lift does not.
+      Confidence changes with direction; support and lift do not.
     </p>
     ${noteHtml}
-    <button type="button" id="reverse-rule">Reverse direction (B → A)</button>
+    <p class="detail-actions">
+      <button type="button" id="reverse-rule">Reverse direction (B \u2192 A)</button>
+    </p>
   `;
 
   const button = target.querySelector("#reverse-rule");
@@ -1349,6 +1415,19 @@ function runTests(logElement) {
   const target = logElement || document.getElementById("testLog");
   if (target) target.textContent = text;
 
+  // Visual summary only. The log text above is written unchanged.
+  const summary = document.getElementById("test-summary");
+  if (summary) {
+    const pill = (kind, count, label) =>
+      `<span class="qa-pill qa-pill--${kind}">${label} <span class="qa-pill__count">${count}</span></span>`;
+    summary.innerHTML = [
+      pill("pass", passed, "Passed"),
+      pill("fail", failed, "Failed"),
+      pill("pending", pendingCount, "Pending"),
+      `<span class="qa-pill">Checks <span class="qa-pill__count">${checks.length}</span></span>`,
+    ].join("");
+  }
+
   return { passed, failed, pending: pendingCount, checks };
 }
 
@@ -1460,6 +1539,14 @@ function init() {
   primeDescriptions();
   N = TRANSACTIONS.length;
   DATASET_INDEX = buildIndex(TRANSACTIONS);
+
+  // Header metadata chips, read straight from the dataset global.
+  const basketsChip = document.getElementById("chip-baskets");
+  const itemsChip = document.getElementById("chip-items");
+  if (basketsChip) basketsChip.textContent = N.toLocaleString("en-US");
+  if (itemsChip) {
+    itemsChip.textContent = (DATASET_INDEX.byStock.size).toLocaleString("en-US");
+  }
   try {
     renderDatasetSummary(DATASET_INDEX);
   } catch (error) {
