@@ -982,7 +982,7 @@ function renderDatasetSummary(index, container) {
 
   target.innerHTML = `
     <dl class="stats">${stats}</dl>
-    <details class="top-items">
+    <details class="top-items" open>
       <summary>Top 5 items by basket count</summary>
       <div class="table-scroll">
         <table class="data-table">
@@ -1561,8 +1561,16 @@ function init() {
     }
   }
   if (status) {
-    status.textContent = `Dataset ready: ${N.toLocaleString("en-US")} baskets, ${data.N_ITEMS.toLocaleString("en-US")} distinct items. Set the thresholds and press “Run rules”.`;
+    status.textContent = `Dataset ready: ${N.toLocaleString("en-US")} baskets, ${data.N_ITEMS.toLocaleString("en-US")} distinct items. Preparing rules…`;
   }
+
+  // Show the actual project results immediately on GitHub Pages. The original
+  // starter deliberately left the results empty until "Run rules" was clicked.
+  // Schedule after first paint so the page visibly loads before Apriori runs.
+  window.setTimeout(() => {
+    runPipeline();
+    runTests();
+  }, 0);
 }
 
 if (typeof document !== "undefined") {
