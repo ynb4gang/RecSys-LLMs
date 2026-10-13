@@ -5,7 +5,7 @@
  *
  * Run:  cd week5/tests && node run-real-pipeline.js
  *
- * Prints: dataset shape / sparsity, split counts, training mean, an
+ * Prints: dataset shape / density / sparsity, split counts, training mean, an
  * independently computed (raw-parse) baseline, the full per-epoch history,
  * best checkpoint, test RMSE, Recall@10 with exclusions, and Top-10 lists for
  * two users with their rating history. Also cross-checks `predictRating`
@@ -27,13 +27,20 @@ async function main() {
 
   console.log(`tf module: ${tfModule} | backend: ${tf.getBackend()} | NUM_FACTORS: ${hw5.NUM_FACTORS}`);
 
-  // --- dataset shape & sparsity ---------------------------------------------
+  // --- dataset shape, density, sparsity --------------------------------------
   const maxMovieId = movies.reduce((m, x) => Math.max(m, x.id), 0);
-  const matrixCells = (numUsers + 1) * (maxMovieId + 1);
+  // The conceptual user-movie matrix is numUsers x maxMovieId (ids are 1-based).
+  // The factor tensors carry an extra sentinel row/column 0 so that tensor row
+  // index == raw id; that sentinel is NOT a user or a movie and is excluded
+  // from the density/sparsity computation below.
+  const conceptualCells = numUsers * maxMovieId;
+  const density = ratings.length / conceptualCells;
   console.log("\n== Dataset ==");
   console.log(`users=${numUsers} movies=${numMovies} ratings=${ratings.length}`);
-  console.log(`dense matrix: ${numUsers + 1} x ${maxMovieId + 1} = ${matrixCells} cells`);
-  console.log(`sparsity: ${(100 * ratings.length / matrixCells).toFixed(3)}% observed`);
+  console.log(`factor tensors: [${numUsers + 1}, F] user rows x [${maxMovieId + 1}, F] item rows (sentinel row/col 0)`);
+  console.log(`conceptual matrix: ${numUsers} x ${maxMovieId} = ${conceptualCells} cells`);
+  console.log(`density  = ${ratings.length}/${conceptualCells} = ${(100 * density).toFixed(3)}%`);
+  console.log(`sparsity = 1 - density = ${(100 * (1 - density)).toFixed(3)}%`);
   console.log(`split: train=${counts.train} val=${counts.val} test=${counts.test}`);
   console.log(`split exclusions (users with <5 ratings): ${hw5.SPLIT_EXCLUSIONS.length}`);
 
