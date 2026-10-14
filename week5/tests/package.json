@@ -1,0 +1,17 @@
+{
+  "name": "hw5-week5-regression-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone Node tests for HW5 matrix factorization. Run with: node regression.test.js",
+  "scripts": {
+    "test": "node regression.test.js",
+    "ui-flow": "node ui-flow.test.js",
+    "real-pipeline": "node run-real-pipeline.js"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs": "4.22.0"
+  },
+  "optionalDependencies": {
+    "@tensorflow/tfjs-node": "4.22.0"
+  }
+}
