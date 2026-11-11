@@ -1,0 +1,33 @@
+{
+  "_note": "SYNTHETIC EXAMPLE ONLY, not copied from FAR-Trans",
+  "cutoff_date": "2021-02-26",
+  "customer": {
+    "customerID": "demo_customer_001",
+    "riskLevel": "Balanced",
+    "investmentCapacity": "CAP_30K_80K",
+    "past_buy_isins": [
+      "DEMO_ISIN_A"
+    ]
+  },
+  "retrieval_model": "user-based kNN",
+  "note": "3 toy candidates shown instead of up to 50",
+  "candidates_in_original_order": [
+    {
+      "ISIN": "DEMO_ISIN_B",
+      "assetCategory": "Stock",
+      "sector": "Technology"
+    },
+    {
+      "ISIN": "DEMO_ISIN_C",
+      "assetCategory": "Bond",
+      "sector": null
+    },
+    {
+      "ISIN": "DEMO_ISIN_D",
+      "assetCategory": "MTF",
+      "sector": null
+    }
+  ],
+  "llm_output_contract": "Output a unique order of exactly these candidate IDs; illustration only, no actual model results.",
+  "metric": "nDCG@10 on future held-out buys (not computed)"
+}
